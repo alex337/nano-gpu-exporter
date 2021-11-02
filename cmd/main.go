@@ -8,14 +8,15 @@ import (
 	"nano-gpu-exporter/pkg/exporter"
 	"nano-gpu-exporter/pkg/util"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const Resources = "nvidia.com/gpu,tke.cloud.tencent.com/qgpu-core,tke.cloud.tencent.com/qgpu-memory,nano-gpu/gpu-percent"
+const Resources = "nvidia.com/gpu, tke.cloud.tencent.com/qgpu-core, tke.cloud.tencent.com/qgpu-memory, nano-gpu/gpu-percent"
 
 var (
-	addr    = flag.String("listen-address", ":8080", "The address to listen on for HTTP requests.")
 	node      string
 	resources string
 	interval  int
@@ -38,6 +39,9 @@ func main() {
 			DisableCompression: true,
 		},
 	))
-	http.Handle("/metrics", promhttp.Handler())
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	port := os.Getenv("PORT")
+	if _, err := strconv.Atoi(port); err != nil {
+		port = "9500"
+	}
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

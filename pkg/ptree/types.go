@@ -14,18 +14,6 @@ func NewNode() *Node {
 	}
 }
 
-func NewP() *Pod {
-	return &Pod{
-		Containers: make(map[string]*Container),
-	}
-}
-
-func NewC() *Container {
-	return &Container{
-		Processes: make(map[int]*Process),
-	}
-}
-
 func (n *Node) GetProcessByPid(pid int) (p *Process, exist bool) {
 	if process, ok := n.Processes[pid]; ok {
 		return process, true
@@ -55,6 +43,7 @@ func (n *Node) addProcess(process *Process) {
 type Pod struct {
 	QOS        string
 	UID        string
+	Name       string
 	Parent     *Node
 	Containers map[string]*Container
 }
@@ -67,10 +56,17 @@ func NewPod(QOS, UID string) *Pod {
 	}
 }
 
+func NewContainer(containerID string) *Container {
+	return &Container{
+		ID:        containerID,
+		Processes: make(map[int]*Process),
+	}
+}
+
 func (p *Pod) AddContainer(ID string) *Container {
 	p.Containers[ID] = &Container{
 		ID:        ID,
-		Parent:    p,
+		Parent:    p.UID,
 		Processes: make(map[int]*Process),
 	}
 	return p.Containers[ID]
@@ -78,7 +74,7 @@ func (p *Pod) AddContainer(ID string) *Container {
 
 type Container struct {
 	ID        string
-	Parent    *Pod
+	Parent    string
 	Processes map[int]*Process
 }
 

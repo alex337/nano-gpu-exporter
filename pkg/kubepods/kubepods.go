@@ -1,6 +1,8 @@
 package kubepods
 
 import (
+	"k8s.io/client-go/util/workqueue"
+	log "k8s.io/klog/v2"
 	v12 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"nano-gpu-exporter/pkg/util"
@@ -17,6 +19,10 @@ import (
 	"k8s.io/klog"
 )
 
+var (
+	KeyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
+)
+
 const(
 	RecommendedKubeConfigPathEnv = "KUBECONFIG"
 )
@@ -24,10 +30,13 @@ const(
 type Handler struct {
 	AddFunc func(pod *v1.Pod)
 	DelFunc func(pod *v1.Pod)
+	UpdateFunc func(oldPod *v1.Pod, newPod *v1.Pod)
+
 }
 
 type Watcher interface {
 	Run(stop <-chan struct{})
+	GetPod(namespace, name string) (*v1.Pod, error)
 }
 
 type KubeWatcher struct {
@@ -37,6 +46,7 @@ type KubeWatcher struct {
 	informers    informers.SharedInformerFactory
 	podInformers cache.SharedIndexInformer
 	podLister    v12.PodLister
+	podQueue     workqueue.RateLimitingInterface
 	handler      *Handler
 }
 
@@ -100,12 +110,14 @@ func NewWatcher(handler *Handler, gpuLabels []string, node string) Watcher {
 		node:         node,
 		client:       client,
 		informers:    informersFactory,
+		podLister:    informersFactory.Core().V1().Pods().Lister(),
 		podInformers: informersFactory.Core().V1().Pods().Informer(),
 		handler:      handler,
 	}
 }
 
 func (w *KubeWatcher) Run(stop <-chan struct{}) {
+	klog.Info("KubeWatcher run")
 	w.podInformers.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod, ok := obj.(*v1.Pod)
@@ -129,6 +141,22 @@ func (w *KubeWatcher) Run(stop <-chan struct{}) {
 			}
 			w.handler.DelFunc(pod)
 		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldPod, ok := oldObj.(*v1.Pod)
+			if !ok {
+				log.Warningf("cannot convert oldObj to *v1.Pod: %v", oldObj)
+				return
+			}
+			newPod, ok := newObj.(*v1.Pod)
+			if !ok {
+				log.Warningf("cannot convert newObj to *v1.Pod: %v", newObj)
+				return
+			}
+			if !util.PodHasResource(newPod, w.labelSet) || !util.PodHasResource(oldPod, w.labelSet) {
+				return
+			}
+			w.handler.UpdateFunc(oldPod, newPod)
+		},
 	})
 	w.informers.Start(stop)
 	w.informers.WaitForCacheSync(stop)
@@ -138,4 +166,8 @@ func nodeNameFilter(nodeName string) func(options *metav1.ListOptions) {
 	return func(options *metav1.ListOptions) {
 		options.FieldSelector = fields.OneTermEqualSelector(util.NodeNameField, nodeName).String()
 	}
+}
+
+func (w *KubeWatcher) GetPod(namespace, name string) (*v1.Pod, error) {
+	return w.podLister.Pods(namespace).Get(name)
 }

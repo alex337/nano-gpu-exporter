@@ -10,6 +10,8 @@ type Cache interface {
 	AddPod(UID string, pod *v1.Pod)
 	DelPod(UID string)
 	GetPod(UID string) (*v1.Pod, bool)
+	KnownPod(UID string) bool
+
 }
 
 type PodCache struct {
@@ -43,3 +45,9 @@ func NewCache() Cache {
 	}
 }
 
+func (p *PodCache) KnownPod(UID string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, ok := p.cache[UID]
+	return ok
+}

@@ -13,12 +13,12 @@ import (
 // PTree is a common interface to detect the tree such as:
 // node -> pods -> containers -> processes
 
-const count int = 0
 
 type PTree interface {
 	Run(stop <-chan struct{})
 	InterestPod(UID, QOS string)
 	ForgetPod(UID string)
+	DeleteScanner(UID string)
 	Snapshot() *Node
 	LastUpdate() time.Time
 }
@@ -60,10 +60,14 @@ func (p *PTreeImpl) InterestPod(UID string, QOS string) {
 func (p *PTreeImpl) ForgetPod(UID string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	//for  {
-	//
-	//}
 	delete(p.interestingPods, UID)
+}
+
+func (p *PTreeImpl) DeleteScanner(UID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.scanner.deleteContainer(UID)
+	p.scanner.deletePod(UID)
 }
 
 func (p *PTreeImpl) Snapshot() *Node {
@@ -85,15 +89,15 @@ func (p *PTreeImpl) nextSnapshot() error {
 		snapshot = NewNode()
 	)
 	for UID, QOS := range pods {
-		if pod, err := p.scanner.Scan(UID, QOS); err != nil {
+		pod, err, exist := p.scanner.Scan(UID, QOS)
+		if err != nil{
 			errors = append(errors, err.Error())
+		} else if !exist{
+			klog.Infof("Pod %s has been  deleted", UID)
 		} else {
 			snapshot.addPod(&pod)
 		}
 	}
-	klog.Info("time:",time.Now())
-	klog.Info("nextSnapshot-------",snapshot)
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.nodeSnapshot = snapshot

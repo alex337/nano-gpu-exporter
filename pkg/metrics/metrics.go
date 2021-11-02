@@ -1,6 +1,8 @@
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 type Collector struct {
 	GPUCore           *prometheus.GaugeVec
@@ -31,7 +33,7 @@ func NewCollector() *Collector {
 		),
 		GPUCoreUtil: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "gpu_core_utilization",
+				Name: "gpu_core_utilization_percentage",
 				Help: "Utilization of gpu core per card",
 			},
 			[]string{"node","card"},
@@ -45,7 +47,7 @@ func NewCollector() *Collector {
 		),
 		GPUMemUtil: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "gpu_mem_utilization",
+				Name: "gpu_mem_utilization_percentage",
 				Help: "Utilization of gpu memory per card",
 			},
 			[]string{"node","card"},
@@ -59,14 +61,14 @@ func NewCollector() *Collector {
 		),
 		PodCoreUtil: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "pod_core_utilization",
+				Name: "pod_core_utilization_percentage",
 				Help: "Utilization of gpu core",
 			},
 			[]string{"node","namespace", "pod"},
 		),
 		PodCoreOccupyNode: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "pod_core_occupy_node",
+				Name: "pod_core_occupy_node_percentage",
 				Help: "Utilization of pod core occupied the node",
 			},
 			[]string{"node","namespace", "pod"},
@@ -80,14 +82,14 @@ func NewCollector() *Collector {
 		),
 		PodMemUtil: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "pod_mem_utilization",
+				Name: "pod_mem_utilization_percentage",
 				Help: "Utilization of pod memory",
 			},
 			[]string{"node","namespace", "pod"},
 		),
 		PodMemOccupyNode: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "pod_mem_occupy_node",
+				Name: "pod_mem_occupy_node_percentage",
 				Help: "Utilization of pod memory occupied the node",
 			},
 			[]string{"node","namespace", "pod"},
@@ -108,7 +110,7 @@ func NewCollector() *Collector {
 		),
 		ContainerCoreUtil: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "container_core_utilization",
+				Name: "container_core_utilization_percentage",
 				Help: "Utilization of container core",
 			},
 			[]string{"node","namespace", "pod", "container"},
@@ -122,7 +124,7 @@ func NewCollector() *Collector {
 		),
 		ContainerMemUtil: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "container_mem_utilization",
+				Name: "container_mem_utilization_percentage",
 				Help: "Utilization of container memory",
 			},
 			[]string{"node","namespace", "pod", "container"},
@@ -146,8 +148,6 @@ func (c *Collector) Register() {
 	prometheus.MustRegister(c.ContainerCoreUtil)
 	prometheus.MustRegister(c.ContainerMem)
 	prometheus.MustRegister(c.ContainerMemUtil)
-
-
 }
 
 func (c *Collector) Card(node, id string, core, mem, coreUtil, memUtil float64) {
@@ -155,9 +155,6 @@ func (c *Collector) Card(node, id string, core, mem, coreUtil, memUtil float64) 
 	c.GPUMem.WithLabelValues(node,id).Set(mem)
 	c.GPUCoreUtil.WithLabelValues(node,id).Set(coreUtil)
 	c.GPUMemUtil.WithLabelValues(node,id).Set(memUtil)
-
-
-
 }
 
 func (c *Collector) Pod(node, namespace, name string, core, mem, coreUtil, memUtil, memRequest, coreOccupy, memOccupy float64) {
@@ -168,8 +165,23 @@ func (c *Collector) Pod(node, namespace, name string, core, mem, coreUtil, memUt
 	c.PodCoreUtil.WithLabelValues(node, namespace, name).Set(coreUtil)
 	c.PodMemOccupyNode.WithLabelValues(node, namespace, name).Set(memOccupy)
 	c.PodCoreOccupyNode.WithLabelValues(node, namespace, name).Set(coreOccupy)
+}
 
+func (c *Collector) DeletePod(node, namespace, name string) {
+	c.PodCore.DeleteLabelValues(node, namespace, name)
+	c.PodMem.DeleteLabelValues(node, namespace, name)
+	c.PodMemRequest.DeleteLabelValues(node, namespace, name)
+	c.PodMemUtil.DeleteLabelValues(node, namespace, name)
+	c.PodCoreUtil.DeleteLabelValues(node, namespace, name)
+	c.PodMemOccupyNode.DeleteLabelValues(node, namespace, name)
+	c.PodCoreOccupyNode.DeleteLabelValues(node, namespace, name)
+}
 
+func (c *Collector) DeleteContainer(node, namespace, pod, container string) {
+	c.ContainerCore.DeleteLabelValues(node, namespace, pod, container)
+	c.ContainerMem.DeleteLabelValues(node, namespace, pod, container)
+	c.ContainerCoreUtil.DeleteLabelValues(node, namespace, pod, container)
+	c.ContainerMemUtil.DeleteLabelValues(node, namespace, pod, container)
 }
 
 func (c *Collector) Container(node, namespace, pod, container string, core, mem, coreUtil, memUtil float64) {
@@ -177,7 +189,6 @@ func (c *Collector) Container(node, namespace, pod, container string, core, mem,
 	c.ContainerMem.WithLabelValues(node, namespace, pod, container).Set(mem)
 	c.ContainerCoreUtil.WithLabelValues(node, namespace, pod, container).Set(coreUtil)
 	c.ContainerMemUtil.WithLabelValues(node, namespace, pod, container).Set(memUtil)
-
 }
 
 
